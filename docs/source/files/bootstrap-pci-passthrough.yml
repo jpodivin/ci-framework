@@ -1,0 +1,114 @@
+---
+# This playbook assumes that the boostrap-hypervisor was alredy executed
+- name: Prepare hypervisor GPU PCI passthrough
+  hosts: "{{ cifmw_target_host | default('all') }}"
+  vars:
+    _user: "{{ remote_user | default('zuul') }}"
+  tasks:
+
+    - name: Install  packages
+      become: true
+      ansible.builtin.package:
+        name:
+          - guestfs-tools
+          - grubby
+          - pciutils
+          - ansible-core
+          - libvirt-daemon-common
+
+    - name: Enable IOMMU on Intel CPUs
+      become: true
+      ansible.builtin.shell:
+        cmd: grubby --update-kernel ALL --args 'intel_iommu=on iommu=pt'
+      when: "{{ intel_cpu | default(false) }}"
+
+    - name: Verify IOMMU
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          virt-host-validate | grep IOMMU | cut -f3 -d:
+      when: "{{ intel_cpu | default(false) }}"
+      register: iommu_validation_result
+      failed_when: "'FAIL' in iommu_validation_result.stdout"
+
+    - name: Get PCI ID for GPU
+      ansible.builtin.shell:
+        cmd: "lspci -n | grep {{ gpu_vendor_id }} | cut -f3 -d' '| cut -f2 -d: | head -n1"
+      register:
+        pci_id
+
+    - name: Set GPU PCI Device ID fact
+      ansible.builtin.set_fact:
+        gpu_pci_id: "{{ pci_id.stdout }}"
+        cacheable: true
+      when: "{{ gpu_pci_id | default('') == ''}}"
+
+    - name: Set vendor ID as fact
+      ansible.builtin.set_fact:
+        gpu_pci_vendor_id: "{{ gpu_vendor_id }}"
+        cacheable: true
+
+    - name: Blacklist NVidia drivers
+      become: true
+      ansible.builtin.blockinfile:
+        block: |
+          blacklist nouveau
+          blacklist nvidia*
+        path: "/etc/modprobe.d/blacklist.conf"
+        create: true
+      when:
+        - gpu_pci_vendor_id == '10de'
+
+    - name: Blacklist AMD drivers
+      become: true
+      ansible.builtin.blockinfile:
+        block: |
+          blacklist amdgpu
+          blacklist radeon
+        path: "/etc/modprobe.d/blacklist.conf"
+        create: true
+      when:
+        - gpu_pci_vendor_id in ['1022', '1002']
+
+    - name: Blacklist Intel drivers
+      become: true
+      ansible.builtin.blockinfile:
+        block: |
+          blacklist i915
+        path: "/etc/modprobe.d/blacklist.conf"
+        create: true
+      when:
+        - gpu_pci_vendor_id == '8086'
+
+    - name: Verify GPU vendor
+      ansible.builtin.shell:
+        cmd: |
+          lspci -n | grep ": {{ gpu_pci_vendor_id }}:"
+
+    - name: VFIO reservation
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          grubby --update-kernel ALL --args "rd.driver.pre=vfio_pci vfio_pci.ids={{ gpu_pci_vendor_id }}:{{ gpu_pci_id }} modules-load=vfio,vfio-pci,vfio_iommu_type1,vfio_pci_vfio_virqfd"
+      when:
+        - gpu_pci_id != ""
+
+    - name: Modify GRUB configuration
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          grub2-mkconfig -o /etc/grub2.cfg
+          grub2-mkconfig -o /boot/grub2/grub.cfg
+      register: grub_modification
+
+
+    - name: Verify vfio in new configuration
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          grep "rd.driver.pre=vfio_pci vfio_pci.ids={{ gpu_pci_vendor_id }}:{{ gpu_pci_id }} modules-load=vfio,vfio-pci,vfio_iommu_type1,vfio_pci_vfio_virqfd" /etc/grub2.cfg && \
+          grep "rd.driver.pre=vfio_pci vfio_pci.ids={{ gpu_pci_vendor_id }}:{{ gpu_pci_id }} modules-load=vfio,vfio-pci,vfio_iommu_type1,vfio_pci_vfio_virqfd" /boot/grub2/grub.cfg
+
+    - name: Reboot with new configuration
+      become: true
+      ansible.builtin.reboot:

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+name: nova-extra-config
+namespace: openstack
+data:
+32-nova-pci-alias.conf: |
+  [pci]
+  alias = {"name":"{{ pci_device_name }}", "product_id":"{{ pci_product_id }}", "vendor_id": "{{ pci_vendor_id }}", "device_type": "{{ pci_device_type }}", "numa_policy": "{{ pci_numa_policy }}"}
+  device_spec = { "vendor_id": "{{ pci_vendor_id }}", "product_id": "{{ pci_product_id }}" }

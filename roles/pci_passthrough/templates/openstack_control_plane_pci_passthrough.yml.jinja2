@@ -1,0 +1,13 @@
+apiVersion: core.openstack.org/v1beta1
+kind: OpenStackControlPlane
+spec:
+  nova:
+    apiOverride:
+      route: {}
+    template:
+      secret: osp-secret
+      apiServiceTemplate:
+        replicas: 3
+        customServiceConfig: |
+          [pci]
+          alias = {"name":"{{ pci_device_name }}", "product_id":"{{ pci_product_id }}", "vendor_id": "{{ pci_vendor_id }}", "device_type": "{{ pci_device_type }}", "numa_policy": "{{ pci_numa_policy }}"}

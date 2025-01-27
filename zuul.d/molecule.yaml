@@ -609,6 +609,17 @@
     files:
     - ^common-requirements.txt
     - ^test-requirements.txt
+    - ^roles/pci_passthrough/(defaults|files|handlers|library|lookup_plugins|module_utils|molecule|tasks|templates|vars).*
+    - ^ci/playbooks/molecule.*
+    - ^.config/molecule/.*
+    name: cifmw-molecule-pci_passthrough
+    parent: cifmw-molecule-base
+    vars:
+      TEST_RUN: pci_passthrough
+- job:
+    files:
+    - ^common-requirements.txt
+    - ^test-requirements.txt
     - ^roles/pkg_build/(defaults|files|handlers|library|lookup_plugins|module_utils|molecule|tasks|templates|vars).*
     - ^ci/playbooks/molecule.*
     - ^.config/molecule/.*

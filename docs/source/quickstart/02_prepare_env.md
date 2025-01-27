@@ -112,3 +112,16 @@ $ ansible-playbook -i custom/inventory.yml \
   -e cifmw_target_host=hypervisors \
   docs/source/files/bootstrap-vxlan.yml
 ```
+
+
+### PCI Passthrough for GPU
+
+When the bootstrap is completed, you can enable PCI passthrough on the hypervisor, using `bootstrap-pci-passthrough.yml` playbook.
+
+```Bash
+$ cd ci-framework
+$ ansible-playbook -i custom/inventory.yml \
+  -e cifmw_target_host=hypervisors \
+  -e gpu_vendor_id=<PCI_DEVICE_VENDOR_ID> \
+  docs/source/files/bootstrap-pci-passthrough.yml
+```
